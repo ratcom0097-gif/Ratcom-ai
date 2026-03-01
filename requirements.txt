@@ -1,2 +1,5 @@
 streamlit
 groq
+bcrypt
+pillow
+
