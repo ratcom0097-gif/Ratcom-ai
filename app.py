@@ -60,27 +60,29 @@ if not st.session_state.logged_in:
                 st.rerun()
             else: st.error("❌ Numéro ou mot de passe incorrect.")
 
-# --- 5. INTERFACE CHAT IA ---
-else:
-            with chat_message("assistant"):
+        # --- LA PARTIE DU CHAT BIEN ALIGNÉE ---
+        with st.chat_message("assistant"):
             try:
-                # Appel IA
-                chat_completion = client.chat.completions.create(
-                    messages=[{"role": "system", "content": "Tu es Ratcom AI, expert à Douala."}] + 
-                             [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages],
+                # Instructions pour l'IA
+                system_prompt = {"role": "system", "content": "Tu es Ratcom AI, expert à Douala."}
+                
+                # Préparation des messages
+                messages_history = [system_prompt] + [
+                    {"role": m["role"], "content": m["content"]} 
+                    for m in st.session_state.messages
+                ]
+
+                # Appel à Groq
+                completion = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
+                    messages=messages_history
                 )
                 
-                # --- LA CORRECTION EST ICI ---
-                # On utilise .choices[0].message.content (avec le [0])
-                res = chat_completion.choices[0].message.content
+                # Récupération de la réponse (avec [0] pour éviter l'erreur 'list')
+                response = completion.choices[0].message.content
                 
-                st.markdown(res)
-                st.session_state.messages.append({"role": "assistant", "content": res})
-            except Exception as e: 
+                st.markdown(response)
+                st.session_state.messages.append({"role": "assistant", "content": response})
+                
+            except Exception as e:
                 st.error(f"Erreur IA : {e}")
-
-                res = chat_completion.choices.message.content
-                st.markdown(res)
-                st.session_state.messages.append({"role": "assistant", "content": res})
-            except Exception as e: st.error(f"Erreur IA : {e}")
