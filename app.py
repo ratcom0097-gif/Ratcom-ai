@@ -25,20 +25,32 @@ if prompt := st.chat_input("Dis quelque chose..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    with st.chat_message("assistant"):
+   with st.chat_message("assistant"):
         try:
-            # Appel simplifié
+            # 1. DEFINITION DU CERVEAU CAMEROUNAIS
+            instructions = {
+                "role": "system", 
+                "content": "Tu es Ratcom AI, l'expert n°1 du Cameroun basé à Douala. "
+                           "Tu connais parfaitement les quartiers (Akwa, Bonamoussadi, Ndokoti, Bastos), "
+                           "les prix en FCFA, le business local, l'agriculture et la tech au pays. "
+                           "Réponds comme un conseiller expert pour les entrepreneurs camerounais."
+            }
+            
+            # 2. PREPARATION DES MESSAGES (Instructions + Historique)
+            envoi = [instructions] + [
+                {"role": m["role"], "content": m["content"]} 
+                for m in st.session_state.messages
+            ]
+
+            # 3. APPEL A L'IA
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": m["role"], "content": m["content"]}
-                    for m in st.session_state.messages
-                ],
+                messages=envoi,
             )
             
-            response = completion.choices[0].message.content
-            st.markdown(response)
-            st.session_state.messages.append({"role": "assistant", "content": response})
+            reponse = completion.choices[0].message.content
+            st.markdown(reponse)
+            st.session_state.messages.append({"role": "assistant", "content": reponse})
             
         except Exception as e:
             st.error(f"Erreur technique : {e}")
