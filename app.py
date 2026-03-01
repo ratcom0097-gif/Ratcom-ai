@@ -3,104 +3,85 @@ import sqlite3
 import bcrypt
 from openai import OpenAI
 
-# --- 1. CONFIGURATION DE LA PAGE ---
-st.set_page_config(page_title="Ratcom AI", page_icon="🚀", layout="centered")
+# --- 1. CONFIGURATION ---
+st.set_page_config(page_title="Ratcom AI", page_icon="🚀")
 
-# --- 2. BASE DE DONNÉES (SÉCURITÉ) ---
-def create_db():
-    conn = sqlite3.connect('ratcom.db', check_same_thread=False)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users 
-                 (username TEXT, phone TEXT UNIQUE, password TEXT, is_pro BOOLEAN)''')
-    conn.commit()
-    conn.close()
+# --- 2. TA CLÉ API (VERIFIE BIEN ICI) ---
+# Si tu as une clé GROQ (commence par gsk_) :
+MY_API_KEY = "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" 
 
-def hash_pw(password):
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+client = OpenAI(
+    api_key=MY_API_KEY,
+    base_url="https://api.groq.com" # Enlève cette ligne si tu utilises OpenAI (sk-)
+)
 
-def check_pw(password, hashed):
-    return bcrypt.checkpw(password.encode('utf-8'), hashed)
+# --- 3. BASE DE DONNÉES ---
+conn = sqlite3.connect('ratcom.db', check_same_thread=False)
+c = conn.cursor()
+c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT, phone TEXT UNIQUE, password TEXT)')
+conn.commit()
 
-# --- 3. LOGIQUE IA (CLÉ API) ---
-# Remplace 'VOTRE_CLE_ICI' par ta vraie clé OpenAI ou Groq
-client = OpenAI(api_key="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")
-
-# --- 4. INTERFACE UTILISATEUR ---
-create_db()
-
+# --- 4. SESSION STATE ---
 if 'logged_in' not in st.session_state:
-    st.session_state['logged_in'] = False
+    st.session_state.logged_in = False
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
 
-# --- PAGE DE CONNEXION ---
-if not st.session_state['logged_in']:
+# --- 5. INTERFACE CONNEXION ---
+if not st.session_state.logged_in:
     st.title("🚖 Ratcom AI - Douala")
-    tab1, tab2 = st.tabs(["Connexion", "Inscription"])
+    menu = ["Connexion", "Inscription"]
+    choice = st.sidebar.selectbox("Menu", menu)
 
-    with tab2:
-        new_user = st.text_input("Nom complet")
-        new_phone = st.text_input("Numéro (6xxxxxxxx)")
-        new_pw = st.text_input("Mot de passe", type='password', key="reg")
-        if st.button("Créer mon compte"):
-            conn = sqlite3.connect('ratcom.db')
-            c = conn.cursor()
+    if choice == "Inscription":
+        name = st.text_input("Nom")
+        phone = st.text_input("Téléphone")
+        pw = st.text_input("Mot de passe", type='password')
+        if st.button("S'inscrire"):
+            h_pw = bcrypt.hashpw(pw.encode('utf-8'), bcrypt.gensalt())
             try:
-                c.execute("INSERT INTO users VALUES (?,?,?,?)", (new_user, new_phone, hash_pw(new_pw), False))
+                c.execute("INSERT INTO users VALUES (?,?,?)", (name, phone, h_pw))
                 conn.commit()
-                st.success("Compte créé ! Connecte-toi maintenant.")
-            except:
-                st.error("Ce numéro existe déjà.")
-            conn.close()
+                st.success("Compte créé ! Connecte-toi.")
+            except: st.error("Numéro déjà utilisé.")
 
-    with tab1:
-        login_phone = st.text_input("Numéro de téléphone")
-        login_pw = st.text_input("Mot de passe", type='password', key="log")
+    else:
+        phone = st.text_input("Téléphone")
+        pw = st.text_input("Mot de passe", type='password')
         if st.button("Se connecter"):
-            conn = sqlite3.connect('ratcom.db')
-            c = conn.cursor()
-            c.execute("SELECT * FROM users WHERE phone=?", (login_phone,))
+            c.execute("SELECT * FROM users WHERE phone=?", (phone,))
             user = c.fetchone()
-            conn.close()
-            if user and check_pw(login_pw, user[2]):
-                st.session_state['logged_in'] = True
-                st.session_state['user'] = user[0]
+            if user and bcrypt.checkpw(pw.encode('utf-8'), user[2]):
+                st.session_state.logged_in = True
+                st.session_state.username = user[0]
                 st.rerun()
-            else:
-                st.error("Identifiants incorrects.")
+            else: st.error("Erreur de connexion.")
 
-# --- PAGE CHAT IA (APRÈS CONNEXION) ---
+# --- 6. INTERFACE CHAT (RATCOM AI) ---
 else:
-    st.sidebar.title(f"Salut, {st.session_state['user'][0]} !") # [0] pour le nom
+    st.title(f"🤖 Bienvenue {st.session_state.username}")
     if st.sidebar.button("Déconnexion"):
-        st.session_state['logged_in'] = False
+        st.session_state.logged_in = False
         st.rerun()
 
-    st.title("🤖 Ratcom AI")
-    st.write("Pose-moi tes questions sur Douala, le business ou la tech.")
-
-    # Initialiser l'historique
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
-    # Afficher les anciens messages
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
 
-    # Zone de saisie
-    if prompt := st.chat_input("Ecris ici..."):
+    if prompt := st.chat_input("Pose ta question à Ratcom AI..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
             try:
-                # APPEL RÉEL À L'IA
-                chat_completion = client.chat.completions.create(
-                    messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages],
-                    model="llama3-8b-8192", # Modèle ultra-rapide pour Groq
+                # Modèle pour Groq : llama3-8b-8192
+                response = client.chat.completions.create(
+                    model="llama3-8b-8192",
+                    messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
                 )
-                response = chat_completion.choices[0].message.content
-                st.markdown(response)
-                st.session_state.messages.append({"role": "assistant", "content": response})
+                full_res = response.choices[0].message.content
+                st.markdown(full_res)
+                st.session_state.messages.append({"role": "assistant", "content": full_res})
             except Exception as e:
-                st.error(f"Erreur avec la clé API : {e}")n_state.messages.append({"role": "assistant", "content": response})
+                st.error(f"Erreur : {e}")
