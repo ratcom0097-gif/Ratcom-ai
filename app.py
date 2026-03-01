@@ -16,7 +16,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 2. INITIALISATION DE L'IA ---
-client = Groq(api_key="TA_CLE_GSK_ICI")
+client = Groq(api_key="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")
 
 if "messages" not in st.session_state:
     # L'instruction système qui me définit comme ton partenaire
