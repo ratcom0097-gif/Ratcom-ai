@@ -81,3 +81,40 @@ st.markdown(f"""
         </button>
     </a>
     """, unsafe_allow_html=True)
+    # --- CONNEXION SÉCURISÉE ---
+if not st.session_state.logged_in:
+    st.title("🚀 Ratcom AI - Connexion")
+    
+    tab1, tab2 = st.tabs(["Se Connecter", "Créer un Compte"])
+    
+    with tab2:
+        new_phone = st.text_input("Ton numéro (ex: 677...)")
+        new_pw = st.text_input("Crée un mot de passe", type='password')
+        if st.button("S'INSCRIRE"):
+            if len(new_phone) >= 9 and len(new_pw) > 3:
+                h_pw = bcrypt.hashpw(new_pw.encode('utf-8'), bcrypt.gensalt())
+                try:
+                    c.execute("INSERT INTO users (username, phone, password) VALUES (?,?,?)", 
+                              ("Client", new_phone, h_pw))
+                    conn.commit()
+                    st.success("✅ Compte créé ! Va sur l'onglet 'Se Connecter'.")
+                except:
+                    st.error("❌ Ce numéro est déjà inscrit.")
+            else:
+                st.warning("⚠️ Remplis bien tous les champs.")
+
+    with tab1:
+        login_phone = st.text_input("Numéro de téléphone")
+        login_pw = st.text_input("Mot de passe", type='password')
+        if st.button("LOG IN"):
+            c.execute("SELECT * FROM users WHERE phone=?", (login_phone,))
+            user = cursor.fetchone()
+            
+            # Comparaison sécurisée
+            if user and bcrypt.checkpw(login_pw.encode('utf-8'), user[2]):
+                st.session_state.logged_in = True
+                st.session_state.username = user[0]
+                st.success("Connexion réussie !")
+                st.rerun()
+            else:
+                st.error("❌ Numéro ou mot de passe incorrect.")
