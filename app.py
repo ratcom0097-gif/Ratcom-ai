@@ -12,7 +12,7 @@ MY_API_KEY = "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"
 
 client = OpenAI(
     api_key=MY_API_KEY,
-    base_url="https://api.groq.com" # Enlève cette ligne si tu utilises OpenAI (sk-)
+    base_url="https://api.groq.com/v1" # Enlève cette ligne si tu utilises OpenAI (sk-)
 )
 
 # --- 3. BASE DE DONNÉES ---
