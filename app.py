@@ -3,7 +3,7 @@ import sqlite3
 import bcrypt
 from groq import Groq
 
-# --- 1. INITIALISATION DES VARIABLES ---
+# --- 1. INITIALISATION DE LA SESSION ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'messages' not in st.session_state:
@@ -14,85 +14,95 @@ if 'username' not in st.session_state:
 # --- 2. CONFIGURATION RATCOM AI ---
 st.set_page_config(page_title="Ratcom AI", page_icon="🤖")
 
-# REMPLACE BIEN gsk_XXX PAR TA CLÉ GROQ
-client = Groq(api_key="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")
+# REMPLACE PAR TA CLÉ GROQ RÉELLE (gsk_...)
+MY_API_KEY = "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"
+client = Groq(api_key=MY_API_KEY)
 
-# --- 3. BASE DE DONNÉES (CORRIGÉ POUR ÉVITER NAMEERROR) ---
-def get_db_connection():
+# --- 3. GESTION DE LA BASE DE DONNÉES ---
+def get_db():
     conn = sqlite3.connect('ratcom.db', check_same_thread=False)
     return conn
 
-# Création de la table au démarrage
-db_conn = get_db_connection()
-db_cursor = db_conn.cursor()
-db_cursor.execute('CREATE TABLE IF NOT EXISTS users (name TEXT, phone TEXT UNIQUE, password TEXT)')
+db_conn = get_db()
+cursor = db_conn.cursor()
+cursor.execute('CREATE TABLE IF NOT EXISTS users (name TEXT, phone TEXT UNIQUE, password TEXT)')
 db_conn.commit()
 
-# --- 4. INTERFACE DE CONNEXION ---
+# --- 4. INTERFACE DE CONNEXION / INSCRIPTION ---
 if not st.session_state.logged_in:
-    st.title("🚀 Ratcom AI - Douala")
-    tab1, tab2 = st.tabs(["Connexion", "Inscription"])
+    st.title("🚖 Ratcom AI - Douala")
+    st.write("L'IA experte du Cameroun.")
+    
+    tab1, tab2 = st.tabs(["Se Connecter", "Créer un Compte"])
 
     with tab2:
-        new_name = st.text_input("Nom complet")
-        new_phone = st.text_input("Numéro (ex: 670000000)")
-        new_pw = st.text_input("Mot de passe", type='password', key="reg")
+        st.subheader("Inscription")
+        new_name = st.text_input("Nom complet", key="reg_name")
+        new_phone = st.text_input("Numéro (ex: 670000000)", key="reg_phone")
+        new_pw = st.text_input("Mot de passe", type='password', key="reg_pw")
+        
         if st.button("S'INSCRIRE"):
             if new_phone and new_pw:
-                hashed = bcrypt.hashpw(new_pw.encode('utf-8'), bcrypt.gensalt())
+                hashed_pw = bcrypt.hashpw(new_pw.encode('utf-8'), bcrypt.gensalt())
                 try:
-                    db_cursor.execute("INSERT INTO users VALUES (?,?,?)", (new_name, new_phone, hashed))
+                    cursor.execute("INSERT INTO users VALUES (?,?,?)", (new_name, new_phone, hashed_pw))
                     db_conn.commit()
                     st.success("✅ Compte créé ! Connecte-toi à gauche.")
-                except: st.error("❌ Ce numéro est déjà utilisé.")
-            else: st.warning("Remplis tous les champs.")
+                except:
+                    st.error("❌ Ce numéro est déjà utilisé.")
+            else:
+                st.warning("⚠️ Remplis tous les champs.")
 
-        with tab1:
-        phone = st.text_input("Numéro de téléphone", key="login_phone")
-        pw = st.text_input("Mot de passe", type='password', key="login_pw")
+    with tab1:
+        st.subheader("Connexion")
+        login_phone = st.text_input("Numéro de téléphone", key="log_phone")
+        login_pw = st.text_input("Mot de passe", type='password', key="log_pw")
         
-        if st.button("SE CONNECTER"):
-            # 1. On récupère l'utilisateur par son numéro
-            db_cursor.execute("SELECT name, password FROM users WHERE phone=?", (phone,))
-            user_data = db_cursor.fetchone()
+        if st.button("LOG IN"):
+            cursor.execute("SELECT name, password FROM users WHERE phone=?", (login_phone,))
+            user_data = cursor.fetchone()
             
             if user_data:
-                # 2. On récupère le mot de passe haché (qui est en 2ème position : index 1)
-                stored_password = user_data[1]
-                
-                # 3. Vérification sécurisée avec bcrypt
-                if bcrypt.checkpw(pw.encode('utf-8'), stored_password):
+                # user_data[1] contient le mot de passe haché
+                if bcrypt.checkpw(login_pw.encode('utf-8'), user_data[1]):
                     st.session_state.logged_in = True
-                    st.session_state.username = user_data[0] # Le nom est à l'index 0
-                    st.success(f"Bienvenue {st.session_state.username} !")
+                    st.session_state.username = user_data[0] # Nom de l'utilisateur
                     st.rerun()
                 else:
-                    st.error("❌ Mot de passe incorrect pour ce numéro.")
+                    st.error("❌ Mot de passe incorrect.")
             else:
-                st.error("❌ Ce numéro n'est pas encore inscrit sur Ratcom AI.")
+                st.error("❌ Numéro non trouvé. Inscris-toi d'abord.")
 
+# --- 5. INTERFACE CHAT IA ---
+else:
+    st.sidebar.title(f"👤 {st.session_state.username}")
+    if st.sidebar.button("Déconnexion"):
+        st.session_state.logged_in = False
+        st.session_state.messages = []
+        st.rerun()
 
-        # --- LA PARTIE DU CHAT BIEN ALIGNÉE ---
+    st.title("🤖 Ratcom AI Expert")
+
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]):
+            st.markdown(m["content"])
+
+    if prompt := st.chat_input("Pose ta question..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
         with st.chat_message("assistant"):
             try:
-                # Instructions pour l'IA
-                system_prompt = {"role": "system", "content": "Tu es Ratcom AI, expert à Douala."}
-                
-                # Préparation des messages
-                messages_history = [system_prompt] + [
-                    {"role": m["role"], "content": m["content"]} 
-                    for m in st.session_state.messages
-                ]
+                system_prompt = {"role": "system", "content": "Tu es Ratcom AI, expert du Cameroun à Douala."}
+                history = [system_prompt] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
 
-                # Appel à Groq
                 completion = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
-                    messages=messages_history
+                    messages=history,
                 )
                 
-                # Récupération de la réponse (avec [0] pour éviter l'erreur 'list')
                 response = completion.choices[0].message.content
-                
                 st.markdown(response)
                 st.session_state.messages.append({"role": "assistant", "content": response})
                 
