@@ -69,7 +69,7 @@ if not st.session_state['logged_in']:
 
 # --- PAGE CHAT IA (APRÈS CONNEXION) ---
 else:
-    st.sidebar.title(f"Salut, {st.session_state['user']} !")
+    st.sidebar.title(f"Salut, {st.session_state['user'][0]} !") # [0] pour le nom
     if st.sidebar.button("Déconnexion"):
         st.session_state['logged_in'] = False
         st.rerun()
@@ -77,20 +77,30 @@ else:
     st.title("🤖 Ratcom AI")
     st.write("Pose-moi tes questions sur Douala, le business ou la tech.")
 
+    # Initialiser l'historique
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
+    # Afficher les anciens messages
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
 
+    # Zone de saisie
     if prompt := st.chat_input("Ecris ici..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            # Ici on simule ou on appelle l'IA
-            response = "Je suis Ratcom AI, ton assistant intelligent à Douala. Comment puis-je t'aider ?"
-            st.markdown(response)
-            st.session_state.messages.append({"role": "assistant", "content": response})
+            try:
+                # APPEL RÉEL À L'IA
+                chat_completion = client.chat.completions.create(
+                    messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages],
+                    model="llama3-8b-8192", # Modèle ultra-rapide pour Groq
+                )
+                response = chat_completion.choices[0].message.content
+                st.markdown(response)
+                st.session_state.messages.append({"role": "assistant", "content": response})
+            except Exception as e:
+                st.error(f"Erreur avec la clé API : {e}")n_state.messages.append({"role": "assistant", "content": response})
