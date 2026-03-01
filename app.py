@@ -62,27 +62,24 @@ if not st.session_state.logged_in:
 
 # --- 5. INTERFACE CHAT IA ---
 else:
-    st.title(f"🤖 Bienvenue {st.session_state.username}")
-    if st.sidebar.button("Déconnexion"):
-        st.session_state.logged_in = False
-        st.rerun()
-
-    for m in st.session_state.messages:
-        with st.chat_message(m["role"]):
-            st.markdown(m["content"])
-
-    if prompt := st.chat_input("Pose ta question à Ratcom AI..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
-
-        with st.chat_message("assistant"):
+            with chat_message("assistant"):
             try:
-                # Appel IA avec modèle récent
+                # Appel IA
                 chat_completion = client.chat.completions.create(
                     messages=[{"role": "system", "content": "Tu es Ratcom AI, expert à Douala."}] + 
                              [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages],
                     model="llama-3.3-70b-versatile",
                 )
+                
+                # --- LA CORRECTION EST ICI ---
+                # On utilise .choices[0].message.content (avec le [0])
+                res = chat_completion.choices[0].message.content
+                
+                st.markdown(res)
+                st.session_state.messages.append({"role": "assistant", "content": res})
+            except Exception as e: 
+                st.error(f"Erreur IA : {e}")
+
                 res = chat_completion.choices.message.content
                 st.markdown(res)
                 st.session_state.messages.append({"role": "assistant", "content": res})
