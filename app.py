@@ -47,18 +47,30 @@ if not st.session_state.logged_in:
                 except: st.error("❌ Ce numéro est déjà utilisé.")
             else: st.warning("Remplis tous les champs.")
 
-    with tab1:
-        phone = st.text_input("Numéro de téléphone")
-        pw = st.text_input("Mot de passe", type='password', key="log")
+        with tab1:
+        phone = st.text_input("Numéro de téléphone", key="login_phone")
+        pw = st.text_input("Mot de passe", type='password', key="login_pw")
+        
         if st.button("SE CONNECTER"):
-            db_cursor.execute("SELECT * FROM users WHERE phone=?", (phone,))
-            user = db_cursor.fetchone()
-            # On vérifie si l'utilisateur existe et si le mot de passe est bon
-            if user and bcrypt.checkpw(pw.encode('utf-8'), user[2]):
-                st.session_state.logged_in = True
-                st.session_state.username = user[0] # On prend le nom
-                st.rerun()
-            else: st.error("❌ Numéro ou mot de passe incorrect.")
+            # 1. On récupère l'utilisateur par son numéro
+            db_cursor.execute("SELECT name, password FROM users WHERE phone=?", (phone,))
+            user_data = db_cursor.fetchone()
+            
+            if user_data:
+                # 2. On récupère le mot de passe haché (qui est en 2ème position : index 1)
+                stored_password = user_data[1]
+                
+                # 3. Vérification sécurisée avec bcrypt
+                if bcrypt.checkpw(pw.encode('utf-8'), stored_password):
+                    st.session_state.logged_in = True
+                    st.session_state.username = user_data[0] # Le nom est à l'index 0
+                    st.success(f"Bienvenue {st.session_state.username} !")
+                    st.rerun()
+                else:
+                    st.error("❌ Mot de passe incorrect pour ce numéro.")
+            else:
+                st.error("❌ Ce numéro n'est pas encore inscrit sur Ratcom AI.")
+
 
         # --- LA PARTIE DU CHAT BIEN ALIGNÉE ---
         with st.chat_message("assistant"):
