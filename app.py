@@ -1,5 +1,20 @@
 import streamlit as st
 from groq import Groq
+import streamlit as st
+import sqlite3
+import bcrypt
+from groq import Groq # ou OpenAI selon ce qu'on a mis
+
+# --- 1. INITIALISATION CRUCIALE (METS ÇA ICI) ---
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
+if 'user' not in st.session_state:
+    st.session_state.user = None
+
+# --- ENSUITE LE RESTE DU CODE ---
+# (Ta configuration Groq, ta base de données, etc.)
 
 # --- CONFIGURATION RATCOM AI ---
 st.set_page_config(page_title="Ratcom AI", page_icon="🤖")
