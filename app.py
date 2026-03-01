@@ -4,17 +4,17 @@ from groq import Groq
 # --- CONFIGURATION RATCOM AI ---
 st.set_page_config(page_title="Ratcom AI", page_icon="🤖")
 
-# METS TA CLÉ gsk_ ICI
+# --- INITIALISATION CLIENT (SANS URL MANUELLE) ---
+# REMPLACE BIEN gsk_XXX PAR TA CLÉ RÉELLE
 client = Groq(api_key="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")
 
 st.title("🤖 Ratcom AI - Douala")
-st.write("Pose ta question à ton assistant intelligent :")
 
 # Initialiser l'historique
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Afficher les anciens messages
+# Afficher les messages
 for m in st.session_state.messages:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
@@ -27,13 +27,18 @@ if prompt := st.chat_input("Dis quelque chose..."):
 
     with st.chat_message("assistant"):
         try:
-            # Appel direct via la bibliothèque Groq (Zéro erreurONS  404)
-            chat_completion = client.chat.completions.create(
-                messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages],
+            # Appel simplifié
+            completion = client.chat.completions.create(
                 model="llama3-8b-8192",
+                messages=[
+                    {"role": m["role"], "content": m["content"]}
+                    for m in st.session_state.messages
+                ],
             )
-            response = chat_completion.choices[0].message.content
+            
+            response = completion.choices[0].message.content
             st.markdown(response)
             st.session_state.messages.append({"role": "assistant", "content": response})
+            
         except Exception as e:
-            st.error(f"Erreur de connexion : {e}")
+            st.error(f"Erreur technique : {e}")
