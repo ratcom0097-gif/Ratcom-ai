@@ -29,7 +29,7 @@ if prompt := st.chat_input("Dis quelque chose..."):
         try:
             # Appel simplifié
             completion = client.chat.completions.create(
-                model="llama-3.3-70b-specdec",
+                model="llama-3.3-70b-versatile",
                 messages=[
                     {"role": m["role"], "content": m["content"]}
                     for m in st.session_state.messages
