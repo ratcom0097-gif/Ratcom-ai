@@ -23,7 +23,7 @@ def check_pw(password, hashed):
 
 # --- 3. LOGIQUE IA (CLÉ API) ---
 # Remplace 'VOTRE_CLE_ICI' par ta vraie clé OpenAI ou Groq
-client = OpenAI(api_key="VOTRE_CLE_ICI")
+client = OpenAI(api_key="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")
 
 # --- 4. INTERFACE UTILISATEUR ---
 create_db()
