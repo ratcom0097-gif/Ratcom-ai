@@ -67,15 +67,32 @@ st.caption("Ton partenaire intelligent à Douala")
 
 # Affichage de l'historique (on cache le message 'system')
 # --- AFFICHAGE DES MESSAGES (VERSION COMPATIBLE) ---
-for message in st.session_state.messages:
-    role = message["role"]
-    content = message["content"]
-    
-    # On utilise une structure simple sans trop de CSS complexe
-    if role == "user":
-        st.info(f"👤 Toi : {content}")
-    elif role == "assistant":
-        st.success(f"🤖 Ratcom AI : {content}")
+# --- AFFICHAGE DES MESSAGES (VERSION COMPATIBLE TOUS TÉLÉPHONES) ---
+for m in st.session_state.messages:
+    # On n'utilise plus 'st.chat_message' qui fait planter les vieux navigateurs
+    # On utilise des blocs standards (info et success)
+    if m["role"] == "user":
+        st.info(f"👤 **Toi :** \n\n {m['content']}")
+    elif m["role"] == "assistant":
+        st.success(f"🤖 **Ratcom AI :** \n\n {m['content']}")
+
+# --- ZONE DE SAISIE ---
+if prompt := st.chat_input("Écris ici..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    st.rerun() # On recharge pour afficher ton message immédiatement
+
+    # Réponse de l'IA (en arrière-plan)
+    try:
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "system", "content": "Tu es Ratcom AI, expert à Douala."}] + 
+                     [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
+        )
+        response = completion.choices[0].message.content
+        st.session_state.messages.append({"role": "assistant", "content": response})
+        st.rerun() # On recharge pour afficher la réponse
+    except Exception as e:
+        st.error(f"Erreur : {e}")
 
 # Zone de saisie
 if prompt := st.chat_input("Comment puis-je t'aider aujourd'hui ?"):
