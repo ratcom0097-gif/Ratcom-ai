@@ -66,10 +66,16 @@ st.title("🚀 Ratcom AI")
 st.caption("Ton partenaire intelligent à Douala")
 
 # Affichage de l'historique (on cache le message 'system')
+# --- AFFICHAGE DES MESSAGES (VERSION COMPATIBLE) ---
 for message in st.session_state.messages:
-    if message["role"] != "system":
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    role = message["role"]
+    content = message["content"]
+    
+    # On utilise une structure simple sans trop de CSS complexe
+    if role == "user":
+        st.info(f"👤 Toi : {content}")
+    elif role == "assistant":
+        st.success(f"🤖 Ratcom AI : {content}")
 
 # Zone de saisie
 if prompt := st.chat_input("Comment puis-je t'aider aujourd'hui ?"):
