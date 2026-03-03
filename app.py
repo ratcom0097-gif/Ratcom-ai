@@ -10,28 +10,39 @@ if "messages" not in st.session_state:
 st.title("🤖 Ratcom AI - Douala")
 
 # --- AFFICHAGE CLASSIQUE (ANTI-BUG) ---
-for m in st.session_state.messages:
-    if m["role"] == "user":
-        st.info(f"👤 **Moi :** {m['content']}")
+# --- AFFICHAGE DE L'HISTORIQUE ---
+for chat in st.session_state.history:
+    st.markdown(f"👤 **Moi :** {chat['user']}")
+    st.info(chat['bot'])
+    st.write("---")
+
+# --- ZONE DE SAISIE UNIQUE (SANS DOUBLON) ---
+user_input = st.text_area("Pose ta question ici :", height=100, key="unique_input")
+
+if st.button("🚀 ENVOYER À RATCOM AI"):
+    if user_input:
+        try:
+            # On prépare les messages pour l'IA
+            messages = [{"role": "system", "content": "Tu es Ratcom AI, expert à Douala."}]
+            for h in st.session_state.history:
+                messages.append({"role": "user", "content": h["user"]})
+                messages.append({"role": "assistant", "content": h["bot"]})
+            messages.append({"role": "user", "content": user_input})
+
+            # Appel à Groq
+            completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=messages
+            )
+            
+            response = completion.choices[0].message.content
+            
+            # Enregistrement et nettoyage
+            st.session_state.history.append({"user": user_input, "bot": response})
+            st.experimental_rerun() # Rafraîchit pour afficher la réponse
+            
+        except Exception as e:
+            st.error(f"Erreur : {e}")
     else:
-        st.success(f"🤖 **Ratcom AI :** {m['content']}")
+        st.warning("⚠️ Écris d'abord ton message !")
 
-# --- ZONE DE TEXTE SIMPLE ---
-with st.form("my_form", clear_on_submit=True):
-    user_input = st.text_input("Pose ta question ici :")
-    submit = st.form_submit_button("Envoyer")
-
-if submit and user_input:
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    
-    try:
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "system", "content": "Tu es Ratcom AI, expert à Douala."}] + 
-                     [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
-        )
-        response = completion.choices[0].message.content
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        st.rerun() # Recharge la page pour afficher la réponse
-    except Exception as e:
-        st.error(f"Erreur : {e}")
