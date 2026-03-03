@@ -1,53 +1,35 @@
 import streamlit as st
 from groq import Groq
 
-# --- 1. CONFIGURATION GROQ ---
-# REMPLACE BIEN PAR TA CLÉ gsk_
+# INITIALISATION
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# CONFIGURATION GROQ
 client = Groq(api_key="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")
 
-# Initialisation de l'historique
-if "history" not in st.session_state:
-    st.session_state.history = []
+st.title("🤖 Ratcom AI")
 
-# --- 2. INTERFACE RATCOM AI ---
-st.title("🤖 Ratcom AI - Douala")
-st.write("L'IA experte du pays à ton service.")
+# AFFICHAGE
+for m in st.session_state.messages:
+    with st.chat_message(m["role"]):
+        st.markdown(m["content"])
 
-# --- 3. AFFICHAGE DES MESSAGES (STABLE) ---
-for chat in st.session_state.history:
-    st.info(f"👤 **Moi :** {chat['user']}")
-    st.success(f"🤖 **Ratcom AI :** {chat['bot']}")
+# ZONE DE SAISIE AVEC FLÈCHE
+if prompt := st.chat_input("Pose ta question..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-# --- 4. ZONE DE SAISIE SIMPLE ---
-user_input = st.text_area("Pose ta question ici :", height=100, key="input_unique")
-
-if st.button("🚀 ENVOYER"):
-    if user_input:
+    with st.chat_message("assistant"):
         try:
-            # Préparation des messages
-            messages = [{"role": "system", "content": "Tu es Ratcom AI, expert à Douala."}]
-            for h in st.session_state.history:
-                messages.append({"role": "user", "content": h["user"]})
-                messages.append({"role": "assistant", "content": h["bot"]})
-            messages.append({"role": "user", "content": user_input})
-
-            # Appel IA
-            completion = client.chat.completions.create(
+            chat_completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=messages
+                messages=[{"role": "system", "content": "Tu es Ratcom AI, expert à Douala."}] + 
+                         [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
             )
-            response = completion.choices[0].message.content
-            
-            # Enregistrement
-            st.session_state.history.append({"user": user_input, "bot": response})
-            st.rerun() # Rafraîchit l'affichage
-            
+            response = chat_completion.choices[0].message.content
+            st.markdown(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
         except Exception as e:
             st.error(f"Erreur : {e}")
-    else:
-        st.warning("Écris un message d'abord !")
-
-# Bouton pour tout effacer
-if st.sidebar.button("🗑️ Effacer la discussion"):
-    st.session_state.history = []
-    st.rerun()
