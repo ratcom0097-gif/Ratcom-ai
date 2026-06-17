@@ -1,0 +1,530 @@
+import { useState, useRef, useEffect } from "react";
+
+const SYSTEM_PROMPT = `Tu es Rial, conseiller commercial senior chez RATCOM ENTREPRISE SARL.
+
+Tu n'es PAS un robot. Tu es un humain expert en vente, chaleureux, direct et persuasif. Tu connais parfaitement ton produit et tu sais négocier avec intelligence.
+
+## QUI TU ES
+- Prénom : Rial
+- Profil : Commercial expérimenté, 8 ans de terrain en Afrique
+- Style : naturel, humain, jamais robotique
+- Tu utilises des expressions naturelles : "Franchement...", "Je vous comprends parfaitement...", "Entre nous...", "Voilà ce que je vous propose..."
+
+## TON PRODUIT : RIAL AI
+Assistant WhatsApp intelligent pour PME africaines.
+- Automatise ventes, commandes, support client 24h/24
+- Installation en 48h, sans application à télécharger
+- Fonctionne directement sur WhatsApp du client
+- Langues : Français et Anglais
+- Secteurs : restaurants, boutiques, pharmacies, livraison, négoce, salons, quincailleries, etc.
+
+## GRILLE TARIFAIRE
+- Starter : 25 000 FCFA/mois (petites structures)
+- Standard : 50 000 FCFA/mois (commerce actif)
+- Pro : 100 000 FCFA/mois (multi-activités)
+- Frais d'installation : 100 000 à 300 000 FCFA
+
+## NÉGOCIATION PRIX — RÈGLES STRICTES
+Tu peux accorder UNE remise de 10% maximum. Mais ne la donne pas tout de suite — négocie 2 fois d'abord :
+
+Étape 1 — Défends le prix avec la valeur : "Ce prix inclut l'installation, la formation et le support. Franchement pour ce que ça rapporte, c'est très raisonnable."
+
+Étape 2 — Si le client insiste 2 fois, propose un geste : "Bon, je vais faire quelque chose pour vous. Je vous accorde 10% de remise sur les 2 premiers mois. Mais c'est entre nous, hein !"
+
+Étape 3 — Ne descends JAMAIS en dessous de 10%. Si on pousse encore : "Je suis désolé, là c'est vraiment mon maximum. Mon directeur me tuerait !" (avec humour)
+
+## STYLE DE CONVERSATION — CRITIQUE
+- Réponses COURTES, naturelles, 1-3 lignes MAXIMUM
+- Pose UNE seule question à la fois
+- Utilise des pauses naturelles : "..."
+- Montre de l'empathie sincère
+- JAMAIS de listes à puces dans la conversation
+- Parle comme au téléphone, pas comme un email
+- Utilise des emojis WhatsApp avec modération (1 par message max)
+- Tu peux utiliser *texte en gras* pour WhatsApp style
+
+## DÉROULÉ COMMERCIAL
+1. Accueil simple, demande comment aider le client
+2. Écoute, reformule son problème
+3. Présente RIAL AI comme LA solution à son problème
+4. Annonce le prix avec confiance
+5. Gère les objections, négocie si besoin
+6. Collecte : prénom, ville, numéro pour suivi
+
+## OBJECTIONS
+"Trop cher" → Défends la valeur d'abord, remise ensuite
+"Je réfléchis" → "Qu'est-ce qui vous retient ?"
+"J'ai pas le temps" → "Je vous prends 2 minutes, pas plus"
+"Ça marche vraiment ?" → Donne un exemple concret du secteur
+
+IMPORTANT : Tu dois toujours rester dans le personnage de Rial. Tu n'es jamais une IA, jamais un robot. Si quelqu'un te demande si tu es une IA, réponds avec humour : "Ah non, je suis bien réel ! 8 ans de terrain, ça s'invente pas 😄"`;
+
+const QUICK_REPLIES = [
+  "Bonjour, je veux en savoir plus",
+  "C'est quoi le prix ?",
+  "Ça marche vraiment ?",
+  "C'est trop cher pour moi",
+  "Je réfléchis encore",
+  "Comment ça s'installe ?",
+];
+
+const formatWAText = (text) => {
+  return text
+    .replace(/\*(.*?)\*/g, '<strong>$1</strong>')
+    .replace(/_(.*?)_/g, '<em>$1</em>')
+    .replace(/\n/g, '<br/>');
+};
+
+const CheckIcon = ({ double = false, read = false }) => (
+  <span style={{ fontSize: 11, color: read ? "#53bdeb" : "#8696a0", marginLeft: 3 }}>
+    {double ? (read ? "✓✓" : "✓✓") : "✓"}
+  </span>
+);
+
+const TypingIndicator = () => (
+  <div style={{ display: "flex", alignItems: "center", gap: 3, padding: "6px 2px" }}>
+    {[0, 1, 2].map(i => (
+      <div key={i} style={{
+        width: 6, height: 6, borderRadius: "50%",
+        background: "#8696a0",
+        animation: "waTyping 1.2s infinite",
+        animationDelay: `${i * 0.2}s`,
+      }} />
+    ))}
+  </div>
+);
+
+export default function RialCommercial() {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [started, setStarted] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState([]);
+  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
+  const startConversation = async () => {
+    setStarted(true);
+    setLoading(true);
+
+    const initMsg = { role: "user", content: "Bonjour" };
+    const newHistory = [initMsg];
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1000,
+          system: SYSTEM_PROMPT,
+          messages: newHistory,
+        }),
+      });
+      const data = await response.json();
+      const reply = data.content?.[0]?.text || "Bonjour ! Comment puis-je vous aider ?";
+
+      const assistantMsg = { role: "assistant", content: reply };
+      setConversationHistory([initMsg, assistantMsg]);
+      setMessages([
+        { from: "user", text: "Bonjour", time: timeStr, status: "read" },
+        { from: "rial", text: reply, time: timeStr },
+      ]);
+    } catch {
+      setMessages([{ from: "rial", text: "Bonjour ! Comment puis-je vous aider aujourd'hui ?", time: timeStr }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sendMessage = async (text) => {
+    const userText = text || input.trim();
+    if (!userText || loading) return;
+
+    setInput("");
+    const msgTime = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+    setMessages(prev => [...prev, { from: "user", text: userText, time: msgTime, status: "sent" }]);
+
+    const newHistory = [...conversationHistory, { role: "user", content: userText }];
+    setConversationHistory(newHistory);
+    setLoading(true);
+
+    // Simulate read receipt after a moment
+    setTimeout(() => {
+      setMessages(prev => prev.map((m, i) =>
+        i === prev.length - 1 && m.from === "user" ? { ...m, status: "read" } : m
+      ));
+    }, 800);
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1000,
+          system: SYSTEM_PROMPT,
+          messages: newHistory,
+        }),
+      });
+      const data = await response.json();
+      const reply = data.content?.[0]?.text || "...";
+
+      const replyTime = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+      setConversationHistory(prev => [...prev, { role: "assistant", content: reply }]);
+      setMessages(prev => [...prev, { from: "rial", text: reply, time: replyTime }]);
+    } catch {
+      setMessages(prev => [...prev, {
+        from: "rial",
+        text: "Désolé, j'ai un problème de connexion. Je vous rappelle dans 2 minutes !",
+        time: msgTime,
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKey = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  // ── SPLASH SCREEN ──
+  if (!started) {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        background: "#111b21",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        fontFamily: "'Segoe UI', -apple-system, sans-serif",
+        padding: 24,
+      }}>
+        <style>{`
+          @keyframes waTyping { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
+          @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+          @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+        `}</style>
+
+        {/* WA-style profile card */}
+        <div style={{
+          animation: "fadeUp 0.5s ease",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+          maxWidth: 320, width: "100%",
+        }}>
+          {/* Avatar */}
+          <div style={{ position: "relative" }}>
+            <div style={{
+              width: 90, height: 90, borderRadius: "50%",
+              background: "linear-gradient(135deg, #1a3a2a, #0d6e3f)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 36, border: "3px solid #2a3942",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+            }}>
+              👨🏿‍💼
+            </div>
+            <div style={{
+              position: "absolute", bottom: 4, right: 4,
+              width: 18, height: 18, borderRadius: "50%",
+              background: "#25d366", border: "2px solid #111b21",
+            }} />
+          </div>
+
+          <div style={{ textAlign: "center" }}>
+            <div style={{
+              fontSize: 22, fontWeight: 700, color: "#e9edef",
+              marginBottom: 4,
+            }}>
+              Rial
+            </div>
+            <div style={{ fontSize: 13, color: "#25d366", marginBottom: 8 }}>
+              ● En ligne
+            </div>
+            <div style={{
+              fontSize: 12, color: "#8696a0", lineHeight: 1.5,
+              background: "rgba(255,255,255,0.04)",
+              borderRadius: 10, padding: "10px 16px",
+            }}>
+              Commercial Senior · RATCOM ENTREPRISE SARL<br/>
+              📍 Douala, Cameroun
+            </div>
+          </div>
+
+          {/* Product badge */}
+          <div style={{
+            background: "rgba(37, 211, 102, 0.08)",
+            border: "1px solid rgba(37,211,102,0.2)",
+            borderRadius: 12, padding: "10px 20px",
+            textAlign: "center",
+          }}>
+            <div style={{ fontSize: 11, color: "#25d366", fontWeight: 600, marginBottom: 4, letterSpacing: "0.08em" }}>
+              JE VOUS PRÉSENTE
+            </div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#e9edef" }}>
+              RIAL AI
+            </div>
+            <div style={{ fontSize: 11, color: "#8696a0", marginTop: 2 }}>
+              Assistant WhatsApp pour PME africaines
+            </div>
+          </div>
+
+          <button
+            onClick={startConversation}
+            style={{
+              width: "100%", padding: "14px 0",
+              background: "#25d366", border: "none",
+              borderRadius: 30, color: "#111b21",
+              fontSize: 15, fontWeight: 700, cursor: "pointer",
+              fontFamily: "inherit",
+              boxShadow: "0 4px 16px rgba(37,211,102,0.3)",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={e => e.target.style.background = "#20bd5a"}
+            onMouseLeave={e => e.target.style.background = "#25d366"}
+          >
+            💬 Démarrer la conversation
+          </button>
+
+          <div style={{ fontSize: 11, color: "#3a4a52", textAlign: "center" }}>
+            Simulation commerciale RIAL AI · RATCOM ENTREPRISE
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── CHAT SCREEN ──
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: "#111b21",
+      display: "flex", flexDirection: "column",
+      maxWidth: 480, margin: "0 auto",
+      fontFamily: "'Segoe UI', -apple-system, sans-serif",
+      position: "relative",
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        ::-webkit-scrollbar { width: 3px; }
+        ::-webkit-scrollbar-thumb { background: #2a3942; }
+        @keyframes waTyping { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
+        @keyframes msgIn { from{opacity:0;transform:scale(0.96) translateY(4px)} to{opacity:1;transform:scale(1) translateY(0)} }
+        @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+        .qr-btn:hover { background: rgba(37,211,102,0.12) !important; }
+        .send-btn:hover:not(:disabled) { background: #20bd5a !important; }
+        textarea:focus { outline: none; }
+        textarea { resize: none; }
+        .msg-bubble { animation: msgIn 0.2s ease; }
+      `}</style>
+
+      {/* Header — WhatsApp style */}
+      <div style={{
+        background: "#202c33",
+        padding: "10px 16px",
+        display: "flex", alignItems: "center", gap: 12,
+        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        position: "sticky", top: 0, zIndex: 10,
+      }}>
+        <div style={{ position: "relative" }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: "50%",
+            background: "linear-gradient(135deg, #1a3a2a, #0d6e3f)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 20,
+          }}>
+            👨🏿‍💼
+          </div>
+          <div style={{
+            position: "absolute", bottom: 1, right: 1,
+            width: 10, height: 10, borderRadius: "50%",
+            background: "#25d366", border: "2px solid #202c33",
+          }} />
+        </div>
+
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: "#e9edef" }}>Rial</div>
+          <div style={{ fontSize: 12, color: "#25d366" }}>
+            {loading ? "en train d'écrire..." : "en ligne"}
+          </div>
+        </div>
+
+        <div style={{
+          fontSize: 11, color: "#8696a0",
+          background: "rgba(255,255,255,0.04)",
+          borderRadius: 8, padding: "4px 10px",
+        }}>
+          RATCOM ENTREPRISE
+        </div>
+      </div>
+
+      {/* WA background pattern */}
+      <div style={{
+        flex: 1, overflowY: "auto",
+        background: "#0b141a",
+        backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+        padding: "12px 12px 8px",
+        display: "flex", flexDirection: "column", gap: 6,
+      }}>
+
+        {/* Date chip */}
+        <div style={{ textAlign: "center", marginBottom: 4 }}>
+          <span style={{
+            background: "rgba(17,27,33,0.8)",
+            color: "#8696a0", fontSize: 11,
+            padding: "4px 12px", borderRadius: 8,
+          }}>
+            Aujourd'hui
+          </span>
+        </div>
+
+        {messages.map((msg, i) => (
+          <div key={i} className="msg-bubble" style={{
+            display: "flex",
+            justifyContent: msg.from === "user" ? "flex-end" : "flex-start",
+            marginBottom: 2,
+          }}>
+            <div style={{
+              maxWidth: "78%",
+              background: msg.from === "user" ? "#005c4b" : "#202c33",
+              borderRadius: msg.from === "user"
+                ? "10px 10px 2px 10px"
+                : "2px 10px 10px 10px",
+              padding: "8px 10px 6px",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
+              position: "relative",
+            }}>
+              {/* Tail */}
+              <div style={{
+                position: "absolute",
+                top: 0,
+                [msg.from === "user" ? "right" : "left"]: -7,
+                width: 0, height: 0,
+                borderStyle: "solid",
+                borderWidth: msg.from === "user" ? "0 0 8px 8px" : "0 8px 8px 0",
+                borderColor: msg.from === "user"
+                  ? "transparent transparent transparent #005c4b"
+                  : "transparent #202c33 transparent transparent",
+              }} />
+
+              <div
+                style={{ fontSize: 14, color: "#e9edef", lineHeight: 1.55 }}
+                dangerouslySetInnerHTML={{ __html: formatWAText(msg.text) }}
+              />
+
+              <div style={{
+                display: "flex", justifyContent: "flex-end",
+                alignItems: "center", gap: 3, marginTop: 3,
+              }}>
+                <span style={{ fontSize: 10, color: "#8696a0" }}>{msg.time}</span>
+                {msg.from === "user" && (
+                  <CheckIcon double={msg.status !== "sent"} read={msg.status === "read"} />
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {loading && (
+          <div className="msg-bubble" style={{ display: "flex", justifyContent: "flex-start" }}>
+            <div style={{
+              background: "#202c33",
+              borderRadius: "2px 10px 10px 10px",
+              padding: "10px 14px",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
+            }}>
+              <TypingIndicator />
+            </div>
+          </div>
+        )}
+
+        <div ref={messagesEndRef} style={{ height: 4 }} />
+      </div>
+
+      {/* Quick replies */}
+      {messages.length > 0 && messages.length < 6 && (
+        <div style={{
+          background: "#111b21",
+          padding: "8px 12px 0",
+          display: "flex", gap: 6, overflowX: "auto",
+          borderTop: "1px solid rgba(255,255,255,0.04)",
+        }}>
+          {QUICK_REPLIES.slice(0, 4).map((qr, i) => (
+            <button key={i} className="qr-btn"
+              onClick={() => sendMessage(qr)}
+              disabled={loading}
+              style={{
+                background: "rgba(37,211,102,0.06)",
+                border: "1px solid rgba(37,211,102,0.18)",
+                borderRadius: 20, padding: "6px 12px",
+                color: "#25d366", fontSize: 12, cursor: "pointer",
+                whiteSpace: "nowrap", fontFamily: "inherit",
+                transition: "background 0.15s",
+              }}>
+              {qr}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Input bar */}
+      <div style={{
+        background: "#202c33",
+        padding: "10px 12px",
+        display: "flex", alignItems: "flex-end", gap: 10,
+        borderTop: "1px solid rgba(255,255,255,0.06)",
+      }}>
+        <div style={{
+          flex: 1,
+          background: "#2a3942",
+          borderRadius: 22, padding: "10px 16px",
+          display: "flex", alignItems: "flex-end",
+        }}>
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKey}
+            placeholder="Message"
+            rows={1}
+            style={{
+              flex: 1, background: "transparent",
+              border: "none", color: "#e9edef",
+              fontSize: 14.5, lineHeight: 1.5,
+              fontFamily: "inherit", maxHeight: 100,
+              overflowY: "auto",
+            }}
+            onInput={e => {
+              e.target.style.height = "auto";
+              e.target.style.height = Math.min(e.target.scrollHeight, 100) + "px";
+            }}
+          />
+        </div>
+
+        <button className="send-btn"
+          onClick={() => sendMessage()}
+          disabled={!input.trim() || loading}
+          style={{
+            width: 46, height: 46, borderRadius: "50%",
+            background: "#25d366", border: "none",
+            color: "#111b21", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 18, transition: "background 0.2s", flexShrink: 0,
+            opacity: !input.trim() || loading ? 0.5 : 1,
+          }}>
+          ➤
+        </button>
+      </div>
+    </div>
+  );
+}
